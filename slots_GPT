@@ -1,0 +1,278 @@
+import tkinter as tk
+from tkinter import simpledialog
+import random
+
+# Constants
+ROWS = 3  # Number of rows in the slot machine
+COLS = 3  # Number of columns in the slot machine
+symbol_count = {
+    "💦": 2,  # Fewer occurrences mean higher value
+    "🍑": 4,
+    "🍒": 6,
+    "🍆": 8  # More occurrences mean lower value
+}
+symbol_value = {
+    "💦": 5,  # Value of each symbol when it appears in a winning line
+    "🍑": 4,
+    "🍒": 3,
+    "🍆": 2
+}
+MAX_LINES = 3  # Maximum number of lines a player can bet on
+MIN_BET = 1    # Minimum bet per line
+MAX_BET = 100  # Maximum bet per line
+
+class SlotMachineGame:
+    def __init__(self, root):
+        # Set up the main window
+        self.root = root
+        self.root.title("Slot Machine")
+        self.root.geometry("600x600")
+
+        # Game state variables
+        self.balance = 0  # Player's balance
+        self.bet_per_line = 1  # Default bet amount per line
+        self.lines = 1  # Default number of lines to bet on
+
+        # Color Palette for the GUI
+        self.bg_color = "#D3D3D3"  # Gray background
+        self.button_color = "#007BFF"  # Blue buttons
+        self.border_color = "#FFFFFF"  # White border
+        self.highlight_color = "#FF5733"  # Highlight color for special effects
+
+        # Set up the GUI components
+        self.create_widgets()
+        self.create_slot_machine()
+
+    def create_widgets(self):
+        """
+        Create all the GUI widgets for the game, including balance display,
+        control panel, and action buttons.
+        """
+        # Background color
+        self.root.config(bg=self.bg_color)
+
+        # Display the player's current balance
+        self.balance_label = tk.Label(self.root, text=f"Balance: $0", font=("Helvetica", 16, "bold"), bg=self.bg_color, fg="black")
+        self.balance_label.pack(pady=20)
+
+        # Control Panel for bets and lines
+        self.control_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.control_frame.pack(pady=10)
+
+        # Input for bet per line
+        tk.Label(self.control_frame, text="Bet Per Line: ", font=("Helvetica", 12, "bold"), fg="black", bg=self.bg_color).grid(row=0, column=0, padx=5)
+        self.bet_entry = tk.Entry(self.control_frame, width=5, font=("Helvetica", 12))
+        self.bet_entry.grid(row=0, column=1)
+        self.bet_entry.insert(0, "1")  # Default bet value
+
+        # Input for number of lines to bet on
+        tk.Label(self.control_frame, text="Lines: ", font=("Helvetica", 12, "bold"), fg="black", bg=self.bg_color).grid(row=0, column=2, padx=5)
+        self.line_entry = tk.Entry(self.control_frame, width=5, font=("Helvetica", 12))
+        self.line_entry.grid(row=0, column=3)
+        self.line_entry.insert(0, "1")  # Default number of lines
+
+        # Lever for spinning (interactive element)
+        self.canvas = tk.Canvas(self.root, width=200, height=100, bg=self.bg_color, bd=0, highlightthickness=0)
+        self.canvas.pack(pady=20)
+
+        # Lever components
+        self.lever_base = self.canvas.create_rectangle(80, 70, 120, 90, fill="#0056b3", outline="#FFFFFF", width=2)
+        self.lever_arm = self.canvas.create_line(100, 70, 100, 40, width=8, fill="#0056b3", smooth=True)
+        self.canvas.create_text(100, 50, text="PULL", font=("Helvetica", 12, "bold"), fill="white")
+
+        # Bind lever arm to click event
+        self.canvas.tag_bind(self.lever_arm, "<Button-1>", self.pull_lever)
+
+        # Bottom panel for deposit and top-up buttons
+        self.bottom_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.bottom_frame.pack(pady=20)
+
+        # Deposit button
+        self.deposit_button = tk.Button(self.bottom_frame, text="Deposit", command=self.deposit, font=("Helvetica", 12, "bold"), bg=self.button_color, fg="white", activebackground="#0056b3")
+        self.deposit_button.pack(side=tk.LEFT, padx=10)
+
+        # Top-up button
+        self.top_up_button = tk.Button(self.bottom_frame, text="Top Up", command=self.top_up, font=("Helvetica", 12, "bold"), bg=self.button_color, fg="white", activebackground="#0056b3")
+        self.top_up_button.pack(side=tk.LEFT, padx=10)
+
+        # Label for displaying spin results or messages
+        self.result_label = tk.Label(self.root, text="", font=("Helvetica", 16, "bold"), bg=self.bg_color, fg="black", height=2)
+        self.result_label.pack(pady=20)
+
+    def create_slot_machine(self):
+        """
+        Set up the slot machine display with labels for symbols.
+        """
+        self.slot_frame = tk.Frame(self.root, bd=3, relief="solid", padx=10, pady=10, bg=self.bg_color, highlightbackground=self.border_color)
+        self.slot_frame.pack(pady=20)
+
+        # Initialize slot labels for each row and column
+        self.slot_labels = [
+            [tk.Label(self.slot_frame, text="💦", font=("Helvetica", 32), bg=self.bg_color, fg="black") for _ in range(COLS)]
+            for _ in range(ROWS)
+        ]
+
+        # Arrange the labels in a grid layout
+        for row in range(ROWS):
+            for col in range(COLS):
+                self.slot_labels[row][col].grid(row=row, column=col, padx=5, pady=5)
+
+    def deposit(self):
+        """
+        Prompts the user to deposit money into their balance.
+        """
+        amount = self.prompt_for_amount("Deposit Amount")
+        if amount is not None:
+            self.balance += amount
+            self.update_balance_label()
+
+    def top_up(self):
+        """
+        Allows the user to add more money to their balance.
+        """
+        amount = self.prompt_for_amount("Top-Up Amount")
+        if amount is not None:
+            self.balance += amount
+            self.update_balance_label()
+
+    def prompt_for_amount(self, title):
+        """
+        Opens a dialog for the user to input an amount of money.
+        """
+        amount = simpledialog.askinteger(title, f"Enter the amount to {title.lower()}:", minvalue=1)
+        return amount
+
+    def update_balance_label(self):
+        """
+        Updates the balance display on the GUI.
+        """
+        self.balance_label.config(text=f"Balance: ${self.balance}")
+
+    def pull_lever(self, event):
+        """
+        Handles the lever pull event, validating bets and initiating a spin.
+        """
+        try:
+            # Get user inputs for bet and lines
+            self.bet_per_line = int(self.bet_entry.get())
+            self.lines = int(self.line_entry.get())
+
+            # Validate the bet and line inputs
+            if self.bet_per_line < MIN_BET or self.bet_per_line > MAX_BET:
+                raise ValueError(f"Bet must be between ${MIN_BET} and ${MAX_BET}.")
+            if self.lines < 1 or self.lines > MAX_LINES:
+                raise ValueError(f"Lines must be between 1 and {MAX_LINES}.")
+        except ValueError as e:
+            self.result_label.config(text=str(e), fg="red")
+            return
+
+        # Calculate total bet and check if player has enough balance
+        total_bet = self.bet_per_line * self.lines
+        if total_bet > self.balance:
+            self.result_label.config(text="You don't have enough balance to place this bet.", fg="red")
+            return
+
+        # Deduct total bet from balance and update display
+        self.balance -= total_bet
+        self.update_balance_label()
+
+        # Display a message and start the lever animation
+        self.result_label.config(text="Pulling lever...", fg="orange")
+        self.animate_pull_lever()
+
+    def animate_pull_lever(self):
+        """
+        Animates the lever being pulled and starts the spin.
+        """
+        # Move the lever arm downward
+        self.canvas.coords(self.lever_arm, 100, 70, 100, 100)
+        self.root.after(500, self.animate_spin)
+
+    def animate_spin(self):
+        """
+        Animates the slot machine spinning with randomized symbols.
+        """
+        all_symbols = ["💦", "🍑", "🍒", "🍆"]
+        for row in range(ROWS):
+            for col in range(COLS):
+                self.slot_labels[row][col].config(fg=self.random_color())
+
+        # Perform smooth animation
+        self.animation_frame = 0
+        self.animate_symbols(all_symbols)
+
+    def animate_symbols(self, symbols):
+        """
+        Performs the spinning animation for the slot machine.
+        """
+        if self.animation_frame < 20:
+            for row in range(ROWS):
+                for col in range(COLS):
+                    random_symbol = random.choice(symbols)
+                    self.slot_labels[row][col].config(text=random_symbol, fg=self.random_color())
+            
+            self.animation_frame += 1
+            self.root.after(100, self.animate_symbols, symbols)
+        else:
+            self.final_spin(symbols)
+
+    def final_spin(self, symbols):
+        """
+        Finalizes the spin, determines the results, and checks for winnings.
+        """
+        columns = self.get_slot_machine_spin(ROWS, COLS, symbol_count)
+        self.update_slot_labels(columns)
+        self.check_winnings(columns, list(range(1, self.lines + 1)), self.bet_per_line, symbol_value)
+
+    def update_slot_labels(self, columns):
+        """
+        Updates the slot machine display with the results of the spin.
+        """
+        for row in range(ROWS):
+            for col in range(COLS):
+                self.slot_labels[row][col].config(text=columns[col][row])
+
+    def get_slot_machine_spin(self, rows, cols, symbols):
+        """
+        Generates a random outcome for the slot machine spin.
+        """
+        all_symbols = []
+        for symbol, count in symbols.items():
+            all_symbols.extend([symbol] * count)
+
+        columns = []
+        for _ in range(cols):
+            column = random.sample(all_symbols, rows)
+            columns.append(column)
+        return columns
+
+    def check_winnings(self, columns, selected_lines, bet, values):
+        """
+        Checks if the spin results in any winnings.
+        """
+        winnings = 0
+        winning_lines = []
+        for line in selected_lines:
+            symbol = columns[0][line - 1]
+            if all(column[line - 1] == symbol for column in columns):
+                winnings += values[symbol] * bet
+                winning_lines.append(line)
+
+        if winnings > 0:
+            self.result_label.config(text=f"Congratulations! You won ${winnings} on lines: {', '.join(map(str, winning_lines))}", fg="green")
+        else:
+            self.result_label.config(text="No winning lines this time. Better luck next spin!", fg="red")
+
+        self.balance += winnings
+        self.update_balance_label()
+
+    def random_color(self):
+        """
+        Returns a random color to make the symbols visually appealing.
+        """
+        return random.choice(["#FF5733", "#DAF7A6", "#FFC300", "#581845", "#C70039"])
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = SlotMachineGame(root)
+    root.mainloop()
